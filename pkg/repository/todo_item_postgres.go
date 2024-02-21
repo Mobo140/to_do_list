@@ -1,0 +1,119 @@
+package repository
+
+import (
+	"database/sql"
+	"fmt"
+	"strings"
+
+	todo "github.com/Mobo140/projects/to_do_list"
+	"github.com/jmoiron/sqlx"
+	"github.com/sirupsen/logrus"
+)
+
+type TodoItemPostgres struct {
+	db *sqlx.DB
+}
+
+var EmptyTodoItem todo.TodoItem
+
+func NewTodoItemPostgres(db *sqlx.DB) *TodoItemPostgres {
+	return &TodoItemPostgres{db: db}
+}
+
+func (r *TodoItemPostgres) Create(listId int, item todo.TodoItem) (int, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+
+	var itemId int
+	createItetsetValues := fmt.Sprintf("INSERT INTO %s (title, description) VALUES ($1, $2) RETURNING id", todoItemsTable)
+	row := tx.QueryRow(createItetsetValues, item.Title, item.Description)
+	if err = row.Scan(&itemId); err != nil {
+		tx.Rollback()
+		return 0, err
+	}
+
+	createListItetsetValues := fmt.Sprintf("INSERT INTO %s (item_id, list_id) VALUES ($1, $2)", listsItemstable)
+	_, err = tx.Exec(createListItetsetValues, itemId, listId)
+	if err != nil {
+		tx.Rollback()
+		return 0, err
+	}
+
+	return itemId, tx.Commit()
+}
+
+func (r *TodoItemPostgres) GetAll(userId, listId int) ([]todo.TodoItem, error) {
+	var items []todo.TodoItem
+	tsetValues := fmt.Sprintf("SELECT ti.id, ti.title, ti.description, ti.done FROM %s ti INNER JOIN %s li on li.item_id = ti.id INNER JOIN %s ul on ul.list_id = li.list_id WHERE ul.user_id =$1 AND li.list_id = $2", todoItemsTable, listsItemstable, usersListsTable)
+	err := r.db.Select(&items, tsetValues, userId, listId)
+
+	return items, err
+}
+
+func (r *TodoItemPostgres) GetById(userId, itemId int) (todo.TodoItem, error) {
+	var item todo.TodoItem
+	tsetValues := fmt.Sprintf("SELECT ti.id, ti.title, ti.description, ti.done FROM %s ti INNER JOIN %s li on li.item_id = ti.id INNER JOIN %s ul on ul.list_id = li.list_id WHERE ti.id = $1 AND ul.user_id = $2", todoItemsTable, listsItemstable, usersListsTable)
+	err := r.db.Get(&item, tsetValues, itemId, userId)
+	if err == sql.ErrNoRows {
+		return EmptyTodoItem, fmt.Errorf("item with ID %d does not exist for user with ID %d", itemId, userId)
+	}
+
+	return item, err
+}
+
+func (r *TodoItemPostgres) Delete(userId, itemId int) error {
+	query := fmt.Sprintf("DELETE FROM %s ti USING %s li, %s ul WHERE li.item_id = ti.id AND li.list_id = ul.list_id AND ul.user_id = $1 AND ti.id = $2", todoItemsTable, listsItemstable, usersListsTable)
+	result, err := r.db.Exec(query, userId, itemId)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("no rows were deleted for user %d and item %d", userId, itemId)
+	}
+
+	return err
+}
+
+func (r *TodoItemPostgres) Update(userId, itemId int, input todo.UpdateItemInput) error {
+	setValues := make([]string, 0) //слайс для элементов которые хотим изменить
+	args := make([]interface{}, 0) //массив интерфейсов для хранения значений которые мы подставим вместо плейсхолдеров
+	argId := 1
+
+	if input.Title != nil {
+		setValues = append(setValues, fmt.Sprintf("title=$%d", argId))
+		args = append(args, *input.Title)
+		argId++
+	}
+	if input.Description != nil {
+		setValues = append(setValues, fmt.Sprintf("description=$%d", argId))
+		args = append(args, *input.Description)
+		argId++
+	}
+	if input.Done != nil {
+		setValues = append(setValues, fmt.Sprintf("done=$%d", argId))
+		args = append(args, *input.Done)
+		argId++
+	}
+
+	setQuery := strings.Join(setValues, ", ")
+
+	query := fmt.Sprintf("UPDATE %s ti SET %s FROM %s li, %s ul WHERE  ti.id = li.item_id AND li.list_id = ul.list_id AND ul.user_id = $%d AND ti.id= $%d",
+		todoItemsTable, setQuery, listsItemstable, usersListsTable, argId, argId+1)
+	args = append(args, userId, itemId)
+
+	logrus.Debugf("updateQuery: %s", query)
+	logrus.Debugf("args: %s", args)
+
+	result, err := r.db.Exec(query, args...)
+	if err != nil {
+		return err
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("not rows were updated for user %d and item %d", userId, itemId)
+	}
+	return err
+}

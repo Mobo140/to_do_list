@@ -115,3 +115,7 @@ func TestTodoItemPostgres_Create(t *testing.T) {
 		})
 	}
 }
+
+func TestTodoItemPostgres_GetAll(t *testing.T) {
+
+}

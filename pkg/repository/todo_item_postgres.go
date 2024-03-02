@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 
@@ -47,20 +46,22 @@ func (r *TodoItemPostgres) Create(listId int, item todo.TodoItem) (int, error) {
 func (r *TodoItemPostgres) GetAll(userId, listId int) ([]todo.TodoItem, error) {
 	var items []todo.TodoItem
 	tsetValues := fmt.Sprintf("SELECT ti.id, ti.title, ti.description, ti.done FROM %s ti INNER JOIN %s li on li.item_id = ti.id INNER JOIN %s ul on ul.list_id = li.list_id WHERE ul.user_id =$1 AND li.list_id = $2", todoItemsTable, listsItemstable, usersListsTable)
-	err := r.db.Select(&items, tsetValues, userId, listId)
+	if err := r.db.Select(&items, tsetValues, userId, listId); err != nil {
+		return nil, err
+	}
 
-	return items, err
+	return items, nil
 }
 
 func (r *TodoItemPostgres) GetById(userId, itemId int) (todo.TodoItem, error) {
 	var item todo.TodoItem
 	tsetValues := fmt.Sprintf("SELECT ti.id, ti.title, ti.description, ti.done FROM %s ti INNER JOIN %s li on li.item_id = ti.id INNER JOIN %s ul on ul.list_id = li.list_id WHERE ti.id = $1 AND ul.user_id = $2", todoItemsTable, listsItemstable, usersListsTable)
-	err := r.db.Get(&item, tsetValues, itemId, userId)
-	if err == sql.ErrNoRows {
-		return EmptyTodoItem, fmt.Errorf("item with ID %d does not exist for user with ID %d", itemId, userId)
+
+	if err := r.db.Get(&item, tsetValues, itemId, userId); err != nil {
+		return item, err
 	}
 
-	return item, err
+	return item, nil
 }
 
 func (r *TodoItemPostgres) Delete(userId, itemId int) error {

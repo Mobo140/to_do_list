@@ -46,9 +46,11 @@ func (r *TodoListPostgres) GetAll(userId int) ([]todo.TodoList, error) {
 	var lists []todo.TodoList
 	query := fmt.Sprintf("SELECT tl.id, tl.title, tl.description  FROM %s tl INNER JOIN %s ul on tl.id = ul.list_id WHERE ul.user_id = $1",
 		todoListsTable, usersListsTable) //INNER JOIN - одинаковые значения в обеих таблицах.
-	err := r.db.Select(&lists, query, userId)
+	if err := r.db.Select(&lists, query, userId); err != nil {
+		return nil, err
+	}
 
-	return lists, err
+	return lists, nil
 }
 
 func (r *TodoListPostgres) GetById(userId, listId int) (todo.TodoList, error) {
@@ -56,9 +58,11 @@ func (r *TodoListPostgres) GetById(userId, listId int) (todo.TodoList, error) {
 
 	query := fmt.Sprintf("SELECT tl.id, tl.title, tl.description FROM %s tl INNER JOIN %s ul on tl.id = ul.list_id WHERE ul.user_id = $1 AND ul.list_id = $2",
 		todoListsTable, usersListsTable)
-	err := r.db.Get(&list, query, userId, listId)
+	if err := r.db.Get(&list, query, userId, listId); err != nil {
+		return list, err
+	}
 
-	return list, err
+	return list, nil
 }
 
 func (r *TodoListPostgres) Delete(userId, listId int) error {
@@ -72,7 +76,7 @@ func (r *TodoListPostgres) Delete(userId, listId int) error {
 	if rowsAffected == 0 {
 		return fmt.Errorf("no rows were deleted for user %d and list %d", userId, listId)
 	}
-	return err
+	return nil
 }
 
 func (r *TodoListPostgres) Update(userId, listId int, input todo.UpdateListInput) error {
@@ -110,5 +114,5 @@ func (r *TodoListPostgres) Update(userId, listId int, input todo.UpdateListInput
 	if rowsAffected == 0 {
 		return fmt.Errorf("no rows were updated for user %d and list %d", userId, listId)
 	}
-	return err
+	return nil
 }

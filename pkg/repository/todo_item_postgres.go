@@ -75,7 +75,7 @@ func (r *TodoItemPostgres) Delete(userId, itemId int) error {
 		return fmt.Errorf("no rows were deleted for user %d and item %d", userId, itemId)
 	}
 
-	return err
+	return nil
 }
 
 func (r *TodoItemPostgres) Update(userId, itemId int, input todo.UpdateItemInput) error {
@@ -116,5 +116,5 @@ func (r *TodoItemPostgres) Update(userId, itemId int, input todo.UpdateItemInput
 	if rowsAffected == 0 {
 		return fmt.Errorf("not rows were updated for user %d and item %d", userId, itemId)
 	}
-	return err
+	return nil
 }

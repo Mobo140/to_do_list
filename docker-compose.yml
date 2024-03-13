@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
     to_do_list:
-      build: ./
+      build: ./                       
       command: ./wait-for-postgres.sh db ./to_do_list
       ports:
         - 8000:8000
